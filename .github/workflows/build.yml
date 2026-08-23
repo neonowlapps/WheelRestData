@@ -36,7 +36,7 @@ jobs:
       contents: write         # cut releases, commit the pointer and heartbeat
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Install toolchain
         run: |
