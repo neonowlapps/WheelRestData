@@ -1,15 +1,14 @@
 {
-  "version": 0,
-  "rows": 61409,
+  "version": 20260822,
+  "rows": 61514,
   "regions": {
-    "scotland": 6409,
-    "north-england": 6360,
-    "midlands": 5803,
-    "london-southeast": 29651,
-    "southwest-england": 5466,
-    "wales": 2283,
-    "ireland-ni": 3937
+    "scotland": 6424,
+    "north-england": 6404,
+    "midlands": 5809,
+    "london-southeast": 29666,
+    "southwest-england": 5480,
+    "wales": 2302,
+    "ireland-ni": 3951
   },
-  "lastRunAt": "2026-08-23T13:51:14Z",
-  "note": "version 0 means nothing has been published yet. The region counts are real baselines measured from the 2026-08-14 artifact, so the churn guard has a genuine reference on its first run."
+  "lastRunAt": "2026-08-23T15:37:43Z"
 }
