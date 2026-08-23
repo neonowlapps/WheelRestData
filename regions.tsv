@@ -1,0 +1,12 @@
+# Region boxes for the churn guard. Tab-separated: name minLat maxLat minLon maxLon
+# Boxes may overlap and need not tile the whole country — they are tripwires, not
+# a partition. What matters is that each one holds a stable, meaningful share of
+# the data, so that "a region silently vanished" cannot hide inside a healthy
+# national total.
+scotland	54.6	61.0	-8.0	-0.7
+north-england	53.0	54.7	-3.7	-0.1
+midlands	52.0	53.0	-3.2	0.3
+london-southeast	50.8	52.0	-1.0	1.8
+southwest-england	49.8	51.5	-6.5	-1.0
+wales	51.3	53.5	-5.5	-2.6
+ireland-ni	51.3	55.5	-11.0	-5.3

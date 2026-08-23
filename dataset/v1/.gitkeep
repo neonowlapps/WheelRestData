@@ -1,0 +1,4 @@
+pointer.json is created here by the first successful publish. Until then this
+directory is intentionally empty: a pointer carrying a hash for a release that
+does not exist would be worse than no pointer at all. Clients treat a 404 as
+"no update available", which they must handle regardless.

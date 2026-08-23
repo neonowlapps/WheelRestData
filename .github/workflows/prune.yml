@@ -1,0 +1,32 @@
+name: prune-releases
+
+# Keeps the last N dataset releases so a rollback is a re-tag rather than a
+# rebuild, and drops the rest. Storage is free, but an unbounded release list
+# makes "which one is good?" harder to answer during an incident.
+on:
+  schedule:
+    - cron: "40 4 2 * *"     # the day after a build, so it never races a publish
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete all but the newest 6 dataset releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          keep=6
+          mapfile -t tags < <(gh release list --limit 100 --json tagName,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[].tagName' | grep '^data-' || true)
+          echo "${#tags[@]} dataset releases; keeping newest $keep"
+          for t in "${tags[@]:$keep}"; do
+            echo "deleting $t"
+            gh release delete "$t" --yes --cleanup-tag
+          done

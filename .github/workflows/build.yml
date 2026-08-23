@@ -1,0 +1,175 @@
+name: build-dataset
+
+# Monthly, fully automatic. There is no human approval step: the guards ARE the
+# gate. All guards pass -> publish. Any guard fails -> the run fails, nothing is
+# published, the previously published dataset stays live, and GitHub emails the
+# failure. A manual gate was considered and rejected: this project already has
+# direct evidence that manual "remember to do X" steps do not get done.
+on:
+  schedule:
+    - cron: "20 3 1 * *"      # 03:20 UTC on the 1st. Clear of Geofabrik's
+                              # ~23:10-23:30 publish window and of the
+                              # top-of-hour Actions surge.
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Bypass the churn ceiling (structural guards still apply)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: dataset
+  cancel-in-progress: false   # never abandon a half-published release
+
+permissions:
+  contents: read              # elevated per-job below
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04     # pinned, NOT ubuntu-latest: the SQLite library
+                              # version is baked into the output file, so a
+                              # silent runner upgrade would change the artifact
+                              # for unchanged input and push a needless 2.25 MB
+                              # download to every user.
+    timeout-minutes: 90
+    permissions:
+      contents: write         # cut releases, commit the pointer and heartbeat
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool jq sqlite3
+          {
+            echo "### Toolchain"
+            echo '```'
+            echo "sqlite3 $(sqlite3 --version)"
+            osmium --version | head -1
+            gzip --version | head -1
+            df -h / | tail -1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build
+        env:
+          FORCE: ${{ inputs.force }}
+        run: scripts/build_dataset.sh
+
+      - name: Load build metadata
+        run: cat build/build.env >> "$GITHUB_ENV"
+
+      - name: Structural guards
+        run: scripts/run_guards.sh "build/cycle_parking-${version}.sqlite"
+
+      - name: Churn guard
+        env:
+          FORCE: ${{ inputs.force }}
+        run: scripts/churn_guard.sh "build/cycle_parking-${version}.sqlite"
+
+      # The artifact must be reproducible: identical input has to yield an
+      # identical .gz, or every client re-downloads 2.25 MB each month for
+      # nothing. gzip -n is what makes this hold (no mtime, no filename).
+      - name: Reproducibility check
+        run: |
+          gzip -9 -n -c "build/cycle_parking-${version}.sqlite" > /tmp/repro.gz
+          a=$(sha256sum "build/cycle_parking-${version}.sqlite.gz" | cut -d' ' -f1)
+          b=$(sha256sum /tmp/repro.gz | cut -d' ' -f1)
+          if [ "$a" != "$b" ]; then
+            echo "::error::gzip is not reproducible ($a vs $b) — is -n missing?"
+            exit 1
+          fi
+          echo "reproducible: $a"
+
+      # If Geofabrik has not published a newer extract, the build is
+      # byte-identical to what is already live. Cutting a duplicate release
+      # would churn the pointer and cost every user a pointless download.
+      - name: Decide whether to publish
+        id: decide
+        run: |
+          published=$(jq -r '.version // 0' dataset-state.json)
+          if [ "$version" = "$published" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Dataset $version already published; nothing to do."
+            echo "### No change — dataset $version already live" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "New dataset $version (was $published)."
+          fi
+
+      - name: Publish release
+        if: steps.decide.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="data-${version}"
+          # Annotated tag on the exact commit that produced this build, so the
+          # scripts behind any published payload stay recoverable.
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Dataset ${version} — ${rows} rows"
+          git push origin "$tag"
+
+          sed "s/__VERSION__/${version}/g; s/__ROWS__/${rows}/g" \
+            .github/release-notes.md > /tmp/notes.md
+
+          gh release create "$tag" \
+            --title "Dataset ${version}" \
+            --notes-file /tmp/notes.md \
+            --latest \
+            "build/cycle_parking-${version}.sqlite.gz" \
+            "ATTRIBUTION.txt"
+
+      # Fetch the asset back the way a client would and confirm the bytes match.
+      # Publishing "succeeded" and the file being retrievable are not the same
+      # claim, and the pointer must never name something clients cannot fetch.
+      - name: Verify published asset
+        if: steps.decide.outputs.publish == 'true'
+        run: scripts/verify_published.sh "${{ github.repository }}" "data-${version}" "$version" "$sha256" "$bytes"
+
+      # Pointer LAST, and only after the payload is confirmed fetchable. A
+      # pointer naming a release that is not yet readable is the one ordering
+      # that breaks clients.
+      - name: Update pointer and baselines
+        if: steps.decide.outputs.publish == 'true'
+        run: |
+          scripts/make_pointer.sh build/build.env "${{ github.repository }}" "data-${version}"
+          cp build/dataset-state.next.json dataset-state.json
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dataset/v1/pointer.json dataset-state.json
+          git commit -m "Publish dataset ${version} (${rows} rows)"
+          git push
+          {
+            echo "### Published dataset ${version}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Rows | ${rows} |"
+            echo "| Compressed | ${bytes} B |"
+            echo "| SHA-256 | \`${sha256}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Runs even when the build failed. A scheduled workflow is auto-disabled
+      # after 60 days of repository INACTIVITY, and a failing run commits
+      # nothing — so without this a long outage would silently switch the cron
+      # off, turning a loud failure into a silent one.
+      - name: Heartbeat
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${GITHUB_REF_NAME}" --quiet || true
+          git checkout "${GITHUB_REF_NAME}" --quiet 2>/dev/null || true
+          git pull --rebase --quiet || true
+          tmp=$(mktemp)
+          jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+             --arg s "${{ job.status }}" \
+             '.lastRunAt = $t | .lastRunStatus = $s' dataset-state.json > "$tmp"
+          mv "$tmp" dataset-state.json
+          if ! git diff --quiet dataset-state.json; then
+            git add dataset-state.json
+            git commit -m "Heartbeat: ${{ job.status }} $(date -u +%Y-%m-%d)"
+            git push || echo "heartbeat push failed; non-fatal"
+          fi

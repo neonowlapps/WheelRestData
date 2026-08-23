@@ -1,0 +1,13 @@
+# Build artifacts NEVER enter git history.
+#
+# A ~5 MB binary committed monthly is permanent repository bloat (git keeps
+# every version forever), and Git LFS — the usual reflex — has a hard 1 GB free
+# quota with metered bandwidth. Releases have neither limit and cost nothing.
+# This file is the single thing standing between "free forever" and a bill.
+build/
+*.sqlite
+*.sqlite.gz
+*.osm.pbf
+*.geojson
+*.csv
+.DS_Store
