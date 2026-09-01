@@ -68,7 +68,12 @@ download_verified() {
   # abort the run. Combined with -C - and the cache, a retry resumes.
   curl --fail --location --retry 5 --retry-delay 5 --retry-all-errors \
        -C - -o "$dest" "$dated_url"
-  curl --fail --location --silent --retry 3 --retry-all-errors \
+  # --show-error is load-bearing alongside --silent: without it curl discards
+  # its own explanation, and a failure reaches the log as a bare "exit code 22"
+  # with no URL and no status code. The 2026-09-01 scheduled run died exactly
+  # that way and had to be diagnosed by re-issuing the request by hand.
+  curl --fail --location --silent --show-error --retry 3 --retry-all-errors \
+       -w '  md5 %{http_code} %{url_effective}\n' \
        -o "$dest.md5" "$dated_url.md5"
 
   local expected actual
