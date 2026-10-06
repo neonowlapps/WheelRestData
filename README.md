@@ -88,6 +88,11 @@ If the extract date has not moved, the build is byte-identical to what is live
 and **nothing is published** — no duplicate release, no pointless 2.25 MB
 download for every user.
 
+The schedule fires on the 1st, with retries on the 2nd and 3rd that are skipped
+once `dataset-state.json` records a successful run that month. A transient
+Geofabrik error — both scheduled runs after Geofabrik moved `-latest` to
+redirects died on one — therefore costs a day, not a month.
+
 ## Guards
 
 `scripts/guards.sql` — 12 structural checks, run against every build:

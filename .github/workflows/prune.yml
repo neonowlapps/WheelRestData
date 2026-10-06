@@ -5,7 +5,8 @@ name: prune-releases
 # makes "which one is good?" harder to answer during an incident.
 on:
   schedule:
-    - cron: "40 4 2 * *"     # the day after a build, so it never races a publish
+    - cron: "40 4 4 * *"     # the day after the last build retry (the 3rd),
+                             # so it never races a publish
   workflow_dispatch:
 
 permissions:

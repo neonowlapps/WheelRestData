@@ -57,7 +57,16 @@ avail_kb="$(df -Pk "$WORKDIR" | awk 'NR==2{print $4}')"
 # different file onto the old bytes, producing a corrupt PBF that still passes
 # a checksum against the *new* .md5 only by luck.
 resolve() {
-  curl --fail --silent --location --head -o /dev/null -w '%{url_effective}' "$1"
+  # --retry-all-errors is load-bearing: plain --retry does not cover exit 47
+  # (too many redirects), which is how the 2026-10-01 scheduled run died —
+  # two minutes of Geofabrik redirecting the -latest name in a loop, reported
+  # as a bare "exit code 47" because --silent had swallowed curl's message.
+  # Re-issued by hand the same request answers in one hop. --max-redirs is low
+  # so a loop fails in seconds rather than after fifty slow hops, and the
+  # retries then wait it out for up to five minutes.
+  curl --fail --silent --show-error --location --head --max-redirs 5 \
+       --retry 5 --retry-delay 60 --retry-all-errors \
+       -o /dev/null -w '%{url_effective}' "$1"
 }
 
 download_verified() {
@@ -92,8 +101,10 @@ extract_date() {
 }
 
 log "Resolving extract URLs..."
-GB_URL="$(resolve https://download.geofabrik.de/europe/great-britain-latest.osm.pbf)"
-IE_URL="$(resolve https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf)"
+GB_URL="$(resolve https://download.geofabrik.de/europe/great-britain-latest.osm.pbf)" \
+  || die "could not resolve the Great Britain extract URL"
+IE_URL="$(resolve https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf)" \
+  || die "could not resolve the Ireland extract URL"
 GB_DATE="$(extract_date "$GB_URL")"; IE_DATE="$(extract_date "$IE_URL")"
 [ -n "$GB_DATE" ] && [ -n "$IE_DATE" ] || die "could not parse extract dates from:\n  $GB_URL\n  $IE_URL"
 

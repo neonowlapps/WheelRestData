@@ -7,9 +7,16 @@ name: build-dataset
 # direct evidence that manual "remember to do X" steps do not get done.
 on:
   schedule:
-    - cron: "20 3 1 * *"      # 03:20 UTC on the 1st. Clear of Geofabrik's
-                              # ~23:10-23:30 publish window and of the
-                              # top-of-hour Actions surge.
+    # 03:20 UTC, clear of Geofabrik's ~23:10-23:30 publish window and of the
+    # top-of-hour Actions surge. The 1st is the build; the 2nd and 3rd are
+    # retries, and the gate job skips them once the month has a successful
+    # run. Both scheduled runs since Geofabrik moved -latest to redirects
+    # (2026-09-01) died on a transient Geofabrik error that a rerun the same
+    # day sailed through, and with one attempt a month, a two-minute blip
+    # cost a month of freshness.
+    - cron: "20 3 1 * *"
+    - cron: "20 3 2 * *"
+    - cron: "20 3 3 * *"
   workflow_dispatch:
     inputs:
       force:
@@ -25,7 +32,34 @@ permissions:
   contents: read              # elevated per-job below
 
 jobs:
+  # Decides whether a scheduled run is still needed. A manual dispatch always
+  # runs; a scheduled run is skipped once dataset-state.json records a
+  # successful run this month, so the retry days never publish a second
+  # dataset on top of a good one.
+  gate:
+    runs-on: ubuntu-24.04
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          month="$(date -u +%Y-%m)"
+          done_this_month=$(jq -r --arg m "$month" \
+            '(.lastRunStatus == "success") and ((.lastRunAt // "") | startswith($m))' \
+            dataset-state.json)
+          if [ "$EVENT" = "schedule" ] && [ "$done_this_month" = "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "A run already succeeded this month; skipping the scheduled retry."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-publish:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-24.04     # pinned, NOT ubuntu-latest: the SQLite library
                               # version is baked into the output file, so a
                               # silent runner upgrade would change the artifact
