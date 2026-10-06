@@ -1,15 +1,14 @@
 {
-  "version": 20260831,
-  "rows": 61568,
+  "version": 20261005,
+  "rows": 61896,
   "regions": {
-    "scotland": 6431,
-    "north-england": 6419,
-    "midlands": 5811,
-    "london-southeast": 29662,
-    "southwest-england": 5494,
-    "wales": 2312,
-    "ireland-ni": 3965
+    "scotland": 6493,
+    "north-england": 6473,
+    "midlands": 5862,
+    "london-southeast": 29714,
+    "southwest-england": 5542,
+    "wales": 2332,
+    "ireland-ni": 4003
   },
-  "lastRunAt": "2026-10-01T10:15:30Z",
-  "lastRunStatus": "failure"
+  "lastRunAt": "2026-10-06T20:55:52Z"
 }
