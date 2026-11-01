@@ -1,7 +1,7 @@
 {
-  "version": 20261005,
-  "url": "https://github.com/neonowlapps/WheelRestData/releases/download/data-20261005/cycle_parking-20261005.sqlite.gz",
-  "bytes": 2269649,
-  "sha256": "a93c6e4f5f6941b583345c73360ecbae662350a87537afd0633dca661c7222bf",
-  "rows": 61896
+  "version": 20261030,
+  "url": "https://github.com/neonowlapps/WheelRestData/releases/download/data-20261030/cycle_parking-20261030.sqlite.gz",
+  "bytes": 2277472,
+  "sha256": "e0af2f009826f30811d1800ebb1999a700616dd02c54c9fa7f781fecbd6b718d",
+  "rows": 62143
 }
