@@ -10,5 +10,6 @@
     "wales": 2345,
     "ireland-ni": 4036
   },
-  "lastRunAt": "2026-11-01T11:36:05Z"
+  "lastRunAt": "2026-11-01T11:36:12Z",
+  "lastRunStatus": "success"
 }
